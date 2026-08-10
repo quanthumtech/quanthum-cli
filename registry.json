@@ -1,0 +1,12 @@
+{
+  "aquiles": {
+    "repo": "https://github.com/quanthumtech/quanthum-aquiles.git",
+    "version": "v0.2.0",
+    "description": "Núcleo Laravel — Sail, Audit, Sanctum, Horizon, RBAC, SSO (opt-in), QaiOnlineService. Frontend por --frontend=react|livewire-mary|livewire-daisy|livewire-tall."
+  },
+  "ulisses": {
+    "repo": "https://github.com/quanthumtech/quanthum-ulisses.git",
+    "version": "v0.1.0",
+    "description": "Next.js 16 + Context API + PostgreSQL (Drizzle)"
+  }
+}

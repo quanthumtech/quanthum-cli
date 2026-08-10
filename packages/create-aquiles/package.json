@@ -1,0 +1,12 @@
+{
+  "name": "@quanthum/create-aquiles",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "quanthum-aquiles": "./bin/quanthum-aquiles.js"
+  },
+  "dependencies": {
+    "@quanthum/cli": "0.1.0"
+  }
+}
