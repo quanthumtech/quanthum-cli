@@ -21,7 +21,7 @@ program
   .description('Cria um novo projeto a partir de um arquétipo do registry')
   .option('--set <CHAVE=valor>', 'Define um placeholder sem prompt interativo (repetível)', collectSet, {})
   .option('--yes', 'Modo não interativo — falha se faltar algum --set ou variante', false)
-  .option('--registry <path>', 'Caminho customizado para o registry.json (uso interno/testes)')
+  .option('--registry <path-ou-url>', 'Caminho local ou URL http(s) para um registry.json alternativo (ex.: o /registry.json de um control plane)')
   // Eixos de variante (ex.: --frontend=react) são declarados pelo template, não pelo CLI —
   // por isso não têm .option() próprio; allowUnknownOption() deixa commander não rejeitar
   // essas flags, e parseVariantFlags() as extrai do argv cru abaixo.

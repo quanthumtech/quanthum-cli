@@ -45,7 +45,7 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
     throw new Error(`O diretório "${options.name}" já existe.`);
   }
 
-  const entry = resolveArchetype(options.archetype, options.registryPath);
+  const entry = await resolveArchetype(options.archetype, options.registryPath);
 
   console.log(`→ Clonando ${entry.repo} (${entry.version})...`);
   await cloneTemplate(entry.repo, entry.version, destDir);

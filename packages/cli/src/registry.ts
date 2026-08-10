@@ -17,21 +17,49 @@ function defaultRegistryPath(): string {
   return path.resolve(__dirname, '../../../registry.json');
 }
 
-export function loadRegistry(registryPath?: string): Registry {
-  const resolvedPath = registryPath ?? process.env.QUANTHUM_REGISTRY ?? defaultRegistryPath();
-  if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`Registry não encontrado em "${resolvedPath}".`);
-  }
-  const raw = fs.readFileSync(resolvedPath, 'utf-8');
+function isUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+/**
+ * Aceita tanto um caminho de arquivo local quanto uma URL http(s) — um
+ * control plane (ex.: quanthum-portal's GET /registry.json) pode servir
+ * o registry ao vivo, no mesmo formato do arquivo estático.
+ */
+export async function loadRegistry(registrySource?: string): Promise<Registry> {
+  const resolved = registrySource ?? process.env.QUANTHUM_REGISTRY ?? defaultRegistryPath();
+
+  const raw = isUrl(resolved) ? await fetchRegistry(resolved) : readLocalRegistry(resolved);
+
   try {
     return JSON.parse(raw) as Registry;
   } catch {
-    throw new Error(`Registry em "${resolvedPath}" não é um JSON válido.`);
+    throw new Error(`Registry em "${resolved}" não é um JSON válido.`);
   }
 }
 
-export function resolveArchetype(name: string, registryPath?: string): RegistryEntry {
-  const registry = loadRegistry(registryPath);
+function readLocalRegistry(registryPath: string): string {
+  if (!fs.existsSync(registryPath)) {
+    throw new Error(`Registry não encontrado em "${registryPath}".`);
+  }
+  return fs.readFileSync(registryPath, 'utf-8');
+}
+
+async function fetchRegistry(url: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (err) {
+    throw new Error(`Não consegui alcançar o registry em "${url}": ${(err as Error).message}`);
+  }
+  if (!response.ok) {
+    throw new Error(`Registry em "${url}" respondeu ${response.status} ${response.statusText}.`);
+  }
+  return response.text();
+}
+
+export async function resolveArchetype(name: string, registrySource?: string): Promise<RegistryEntry> {
+  const registry = await loadRegistry(registrySource);
   const entry = registry[name];
   if (!entry) {
     const available = Object.keys(registry).join(', ') || '(nenhum)';
