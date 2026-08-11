@@ -1,8 +1,8 @@
 {
   "aquiles": {
     "repo": "https://github.com/quanthumtech/quanthum-aquiles.git",
-    "version": "v0.2.1",
-    "description": "Núcleo Laravel — Sail, Audit, Sanctum, Horizon, RBAC, SSO (opt-in), QaiOnlineService. Frontend por --frontend=react|livewire-mary|livewire-daisy|livewire-tall."
+    "version": "v0.2.2",
+    "description": "Núcleo Laravel — Sail, Audit, Sanctum, Horizon, RBAC, SSO (opt-in), Login (Fortify), QaiOnlineService. Frontend por --frontend=react|livewire-mary|livewire-daisy|livewire-tall."
   },
   "ulisses": {
     "repo": "https://github.com/quanthumtech/quanthum-ulisses.git",
