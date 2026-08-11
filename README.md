@@ -28,6 +28,30 @@ quanthum new aquiles minha-app
 quanthum-aquiles minha-app
 ```
 
+## Docker
+
+A imagem carrega Node + PHP 8.3 + Composer + git — não só Node — porque o
+`setup` de arquétipos reais (Aquiles = `composer install`/`artisan`,
+Ulisses = `npm install`) precisa dessas toolchains disponíveis dentro do
+container, senão o clone funciona e o setup quebra no primeiro comando PHP.
+
+```bash
+docker build -t quanthum-cli .
+
+# --user evita que os arquivos criados no bind mount fiquem donos de root;
+# HOME=/tmp dá pro git um lugar gravável pra --global config dentro do container.
+docker run --rm -it \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$(pwd):/workspace" \
+  -e GH_TOKEN=ghp_xxx \
+  -e QUANTHUM_REGISTRY=https://architecture.quanthum.tec.br/registry.json \
+  quanthum-cli new aquiles minha-app --frontend=react
+```
+
+- `GH_TOKEN` — só necessário pra clonar `quanthum-aquiles`/`quanthum-ulisses` (repos privados). Um PAT com `repo` read é suficiente.
+- `QUANTHUM_REGISTRY` — aponta pro registry.json ao vivo do portal em vez do estático bundlado na imagem; também aceita `--registry <url>` no comando.
+- Sem `-it` num pipeline não-interativo, sempre passe `--yes` + `--set CHAVE=valor` pra cada placeholder (senão o prompt do `@clack/prompts` falha por falta de TTY).
+
 ## Testes
 
 ```bash
