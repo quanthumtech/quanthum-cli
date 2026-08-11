@@ -35,8 +35,12 @@ A imagem carrega Node + PHP 8.3 + Composer + git — não só Node — porque o
 Ulisses = `npm install`) precisa dessas toolchains disponíveis dentro do
 container, senão o clone funciona e o setup quebra no primeiro comando PHP.
 
+A imagem é publicada automaticamente no GHCR (`.github/workflows/docker-publish.yml`)
+a cada push na `master` (`:latest`) e a cada tag `v*` (versão fixa, ex.: `:0.1.0`)
+— não precisa buildar local pra usar:
+
 ```bash
-docker build -t quanthum-cli .
+docker pull ghcr.io/quanthumtech/quanthum-cli:latest
 
 # --user evita que os arquivos criados no bind mount fiquem donos de root;
 # HOME=/tmp dá pro git um lugar gravável pra --global config dentro do container.
@@ -45,7 +49,14 @@ docker run --rm -it \
   -v "$(pwd):/workspace" \
   -e GH_TOKEN=ghp_xxx \
   -e QUANTHUM_REGISTRY=https://architecture.quanthum.tec.br/registry.json \
-  quanthum-cli new aquiles minha-app --frontend=react
+  ghcr.io/quanthumtech/quanthum-cli new aquiles minha-app --frontend=react
+```
+
+Pra buildar local em vez de puxar do GHCR (ex.: testando uma mudança no `Dockerfile`):
+
+```bash
+docker build -t quanthum-cli .
+# troque "ghcr.io/quanthumtech/quanthum-cli" por "quanthum-cli" no comando acima
 ```
 
 - `GH_TOKEN` — só necessário pra clonar `quanthum-aquiles`/`quanthum-ulisses` (repos privados). Um PAT com `repo` read é suficiente.
