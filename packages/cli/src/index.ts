@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { runNew } from './commands/new.js';
+import { DEFAULT_LIVE_REGISTRY_URL } from './registry.js';
 import { parseVariantFlags } from './variant-flags.js';
 
 function collectSet(value: string, previous: Record<string, string>): Record<string, string> {
@@ -21,7 +22,9 @@ program
   .description('Cria um novo projeto a partir de um arquétipo do registry')
   .option('--set <CHAVE=valor>', 'Define um placeholder sem prompt interativo (repetível)', collectSet, {})
   .option('--yes', 'Modo não interativo — falha se faltar algum --set ou variante', false)
-  .option('--registry <path-ou-url>', 'Caminho local ou URL http(s) para um registry.json alternativo (ex.: o /registry.json de um control plane)')
+  // [valor] (não <valor>): opcional — "--registry" sozinho, sem URL, usa
+  // DEFAULT_LIVE_REGISTRY_URL (o registry ao vivo oficial da Quanthum).
+  .option('--registry [path-ou-url]', `Registry alternativo — caminho local, URL http(s), ou vazio pro ao vivo oficial (${DEFAULT_LIVE_REGISTRY_URL})`)
   // Eixos de variante (ex.: --frontend=react) são declarados pelo template, não pelo CLI —
   // por isso não têm .option() próprio; allowUnknownOption() deixa commander não rejeitar
   // essas flags, e parseVariantFlags() as extrai do argv cru abaixo.
@@ -34,7 +37,9 @@ program
         set: opts.set,
         variants: parseVariantFlags(process.argv.slice(2)),
         interactive: !opts.yes,
-        registryPath: opts.registry,
+        // commander marca opts.registry como `true` (não a string) quando a flag
+        // vem sem valor — é aí que cai pro registry ao vivo oficial.
+        registryPath: opts.registry === true ? DEFAULT_LIVE_REGISTRY_URL : opts.registry,
       });
     } catch (err) {
       console.error(`\n✖ ${(err as Error).message}`);

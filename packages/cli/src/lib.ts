@@ -6,7 +6,7 @@
  */
 export { runNew } from './commands/new.js';
 export type { RunNewOptions, RunNewResult } from './commands/new.js';
-export { resolveArchetype, loadRegistry } from './registry.js';
+export { resolveArchetype, loadRegistry, DEFAULT_LIVE_REGISTRY_URL } from './registry.js';
 export type { Registry, RegistryEntry } from './registry.js';
 export { parseVariantFlags } from './variant-flags.js';
 export type { VariantChoices } from './variants.js';

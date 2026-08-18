@@ -19,6 +19,13 @@ export interface RegistryEntry {
 
 export type Registry = Record<string, RegistryEntry>;
 
+/**
+ * O registry ao vivo do portal oficial — é dele que vem `postSetup`. `--registry`
+ * sem valor (ou `QUANTHUM_REGISTRY=1`, ver index.ts/quanthum-aquiles.js) usa isso,
+ * pra quem só quer "o ao vivo, o de sempre" não precisar copiar a URL inteira.
+ */
+export const DEFAULT_LIVE_REGISTRY_URL = 'https://architecture.quanthum.tec.br/registry.json';
+
 /** Caminho padrão: registry.json na raiz do monorepo (3 níveis acima de dist/registry.js). */
 function defaultRegistryPath(): string {
   return path.resolve(__dirname, '../../../registry.json');
