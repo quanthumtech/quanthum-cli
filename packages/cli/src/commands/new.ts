@@ -87,7 +87,11 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
     ) + '\n',
   );
 
-  const setupCommands = [...manifest.setup, ...variantSetup];
+  // postSetup vem do registry (tema/blocos anexados ao arquétipo no portal), não
+  // do manifest do template — por isso roda por último: o setup do
+  // manifest/variante é o que deixa o projeto num estado onde `npx shadcn add`
+  // funciona (deps instaladas, tailwind configurado etc.).
+  const setupCommands = [...manifest.setup, ...variantSetup, ...(entry.postSetup ?? [])];
   if (setupCommands.length > 0) {
     console.log('→ Rodando setup...');
     await runSetup(destDir, setupCommands);

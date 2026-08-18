@@ -8,6 +8,13 @@ export interface RegistryEntry {
   repo: string;
   version: string;
   description?: string;
+  /**
+   * Comandos rodados depois do `setup` do manifesto (ex.: `npx shadcn@latest
+   * add dashboard-01`) — vêm do tema/blocos que o quanthum-portal anexou ao
+   * arquétipo, não do template em si. Nem todo registry (ex.: o registry.json
+   * estático) precisa ter isso.
+   */
+  postSetup?: string[];
 }
 
 export type Registry = Record<string, RegistryEntry>;

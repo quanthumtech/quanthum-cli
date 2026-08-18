@@ -48,6 +48,12 @@ describe('quanthum new', () => {
       JSON.stringify(
         {
           teste: { repo: templateDir, version: 'latest', description: 'Template de teste' },
+          'com-post-setup': {
+            repo: templateDir,
+            version: 'latest',
+            description: 'Template de teste com tema/blocos anexados',
+            postSetup: ['echo tema >> setup.log', 'echo bloco >> setup.log'],
+          },
         },
         null,
         2,
@@ -81,6 +87,20 @@ describe('quanthum new', () => {
     // histórico git recriado do zero: só o commit de scaffold, nada do template original.
     const log = await execa('git', ['log', '--format=%s'], { cwd: destDir });
     expect(log.stdout.trim().split('\n')).toEqual(['Scaffold from quanthum-teste@latest']);
+  });
+
+  it('roda postSetup do registry depois do setup do manifest, na ordem', async () => {
+    const { destDir } = await runNew({
+      archetype: 'com-post-setup',
+      name: 'app-com-tema',
+      cwd: workDir,
+      registryPath,
+      set: { APP_NAME: 'App com tema' },
+      interactive: false,
+    });
+
+    const log = fs.readFileSync(path.join(destDir, 'setup.log'), 'utf-8').trim().split('\n');
+    expect(log).toEqual(['done', 'tema', 'bloco']);
   });
 
   it('recusa se o diretório de destino já existe', async () => {
