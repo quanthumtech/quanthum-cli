@@ -16,6 +16,7 @@ async function initGitRepo(dir: string): Promise<void> {
 describe('quanthum new', () => {
   let workDir: string;
   let templateDir: string;
+  let templateComVariantesDir: string;
   let registryPath: string;
 
   beforeAll(async () => {
@@ -42,6 +43,41 @@ describe('quanthum new', () => {
 
     await initGitRepo(templateDir);
 
+    // Template com eixo de variante — uma opção declara supportsPostSetup, a
+    // outra não (espelha o caso real: Aquiles "react" tem shadcn/ui, os
+    // Livewire não têm).
+    templateComVariantesDir = path.join(workDir, 'template-com-variantes');
+    fs.mkdirSync(templateComVariantesDir);
+    fs.writeFileSync(
+      path.join(templateComVariantesDir, 'quanthum.json'),
+      JSON.stringify(
+        {
+          name: 'com-variantes',
+          version: '0.1.0',
+          variants: {
+            frontend: {
+              prompt: 'Frontend?',
+              default: 'shadcn',
+              options: {
+                shadcn: { path: 'variants/shadcn', supportsPostSetup: true, setup: [] },
+                plain: { path: 'variants/plain', setup: [] },
+              },
+            },
+          },
+          setup: ['echo done > setup.log'],
+        },
+        null,
+        2,
+      ),
+    );
+    // git não versiona diretório vazio — precisa de um arquivo dentro pra
+    // "variants/shadcn"/"variants/plain" sobreviverem ao clone.
+    fs.mkdirSync(path.join(templateComVariantesDir, 'variants', 'shadcn'), { recursive: true });
+    fs.writeFileSync(path.join(templateComVariantesDir, 'variants', 'shadcn', 'marker.txt'), 'shadcn\n');
+    fs.mkdirSync(path.join(templateComVariantesDir, 'variants', 'plain'), { recursive: true });
+    fs.writeFileSync(path.join(templateComVariantesDir, 'variants', 'plain', 'marker.txt'), 'plain\n');
+    await initGitRepo(templateComVariantesDir);
+
     registryPath = path.join(workDir, 'registry.json');
     fs.writeFileSync(
       registryPath,
@@ -53,6 +89,12 @@ describe('quanthum new', () => {
             version: 'latest',
             description: 'Template de teste com tema/blocos anexados',
             postSetup: ['echo tema >> setup.log', 'echo bloco >> setup.log'],
+          },
+          'com-variantes': {
+            repo: templateComVariantesDir,
+            version: 'latest',
+            description: 'Template com variante shadcn-compatível e uma que não é',
+            postSetup: ['echo tema >> setup.log'],
           },
         },
         null,
@@ -101,6 +143,34 @@ describe('quanthum new', () => {
 
     const log = fs.readFileSync(path.join(destDir, 'setup.log'), 'utf-8').trim().split('\n');
     expect(log).toEqual(['done', 'tema', 'bloco']);
+  });
+
+  it('roda postSetup quando a variante escolhida declara supportsPostSetup', async () => {
+    const { destDir } = await runNew({
+      archetype: 'com-variantes',
+      name: 'app-shadcn',
+      cwd: workDir,
+      registryPath,
+      variants: { frontend: 'shadcn' },
+      interactive: false,
+    });
+
+    const log = fs.readFileSync(path.join(destDir, 'setup.log'), 'utf-8').trim().split('\n');
+    expect(log).toEqual(['done', 'tema']);
+  });
+
+  it('pula postSetup quando a variante escolhida NÃO declara supportsPostSetup', async () => {
+    const { destDir } = await runNew({
+      archetype: 'com-variantes',
+      name: 'app-plain',
+      cwd: workDir,
+      registryPath,
+      variants: { frontend: 'plain' },
+      interactive: false,
+    });
+
+    const log = fs.readFileSync(path.join(destDir, 'setup.log'), 'utf-8').trim().split('\n');
+    expect(log).toEqual(['done']);
   });
 
   it('recusa se o diretório de destino já existe', async () => {

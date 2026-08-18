@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cloneTemplate, reinitGit } from '../clone.js';
 import { applyPlaceholders, resolvePlaceholderValues, type PlaceholderValues } from '../customize.js';
-import { parseManifest, type Manifest } from '../manifest.js';
+import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manifest.js';
 import { resolveArchetype } from '../registry.js';
 import { runSetup } from '../setup.js';
 import { applyVariants, cleanupVariantDirs, resolveVariantChoices, type VariantChoices } from '../variants.js';
@@ -90,8 +90,22 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
   // postSetup vem do registry (tema/blocos anexados ao arquétipo no portal), não
   // do manifest do template — por isso roda por último: o setup do
   // manifest/variante é o que deixa o projeto num estado onde `npx shadcn add`
-  // funciona (deps instaladas, tailwind configurado etc.).
-  const setupCommands = [...manifest.setup, ...variantSetup, ...(entry.postSetup ?? [])];
+  // funciona (deps instaladas, tailwind configurado etc.). Só entra se a
+  // variante escolhida declarar suporte (ver supportsPostSetup em manifest.ts)
+  // — sem isso, um shadcn add rodaria numa variante Livewire/Blade sem
+  // components.json nenhum.
+  const postSetup = entry.postSetup ?? [];
+  const skipPostSetup = postSetup.length > 0 && !variantsSupportPostSetup(manifest, variantChoices);
+  const setupCommands = [...manifest.setup, ...variantSetup, ...(skipPostSetup ? [] : postSetup)];
+
+  if (skipPostSetup) {
+    console.log(
+      `→ Pulando o setup extra do registry (tema/blocos) — a variante escolhida (${Object.entries(variantChoices)
+        .map(([axis, choice]) => `${axis}=${choice}`)
+        .join(', ')}) não declara suporte a isso no quanthum.json.`,
+    );
+  }
+
   if (setupCommands.length > 0) {
     console.log('→ Rodando setup...');
     await runSetup(destDir, setupCommands);
