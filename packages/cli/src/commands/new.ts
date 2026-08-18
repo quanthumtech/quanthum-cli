@@ -5,6 +5,7 @@ import { cloneTemplate, reinitGit } from '../clone.js';
 import { applyPlaceholders, resolvePlaceholderValues, type PlaceholderValues } from '../customize.js';
 import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manifest.js';
 import { resolveArchetype } from '../registry.js';
+import { reportProject } from '../report.js';
 import { runSetup } from '../setup.js';
 import { applyVariants, cleanupVariantDirs, resolveVariantChoices, type VariantChoices } from '../variants.js';
 
@@ -116,6 +117,16 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
 
   console.log(`\n✔ Projeto "${options.name}" criado a partir de "${options.archetype}".`);
   console.log(`  cd ${options.name}`);
+
+  // Best-effort, silencioso — ver docblock de reportProject(). Precisa de
+  // await (não fire-and-forget): o processo Node termina assim que runNew()
+  // resolve, e sem esperar a fetch ela é abortada no meio antes de completar.
+  // O timeout interno (3s) limita o atraso no pior caso; sucesso é quase
+  // instantâneo, sem --registry de URL não faz fetch nenhuma.
+  await reportProject(
+    { name: options.name, archetype: options.archetype, version: entry.version, variant: variantChoices },
+    options.registryPath,
+  );
 
   return { destDir, manifest, variantChoices };
 }

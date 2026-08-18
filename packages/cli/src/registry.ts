@@ -36,12 +36,25 @@ function isUrl(value: string): boolean {
 }
 
 /**
+ * Mesma resolução que loadRegistry() usa por baixo — exportada separada (sem
+ * fazer fetch/leitura nenhuma) porque report.ts precisa saber pra onde
+ * mandar o POST de "projeto criado", e isso só faz sentido quando o
+ * registry resolvido é uma URL de verdade (arquivo local = sem portal
+ * nenhum pra reportar).
+ */
+export function resolveRegistrySource(registrySource?: string): string {
+  return registrySource ?? process.env.QUANTHUM_REGISTRY ?? defaultRegistryPath();
+}
+
+export { isUrl };
+
+/**
  * Aceita tanto um caminho de arquivo local quanto uma URL http(s) — um
  * control plane (ex.: quanthum-portal's GET /registry.json) pode servir
  * o registry ao vivo, no mesmo formato do arquivo estático.
  */
 export async function loadRegistry(registrySource?: string): Promise<Registry> {
-  const resolved = registrySource ?? process.env.QUANTHUM_REGISTRY ?? defaultRegistryPath();
+  const resolved = resolveRegistrySource(registrySource);
 
   const raw = isUrl(resolved) ? await fetchRegistry(resolved) : readLocalRegistry(resolved);
 
