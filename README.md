@@ -28,6 +28,18 @@ quanthum new aquiles minha-app
 quanthum-aquiles minha-app
 ```
 
+Por padrão isso lê o `registry.json` **estático** bundlado no pacote (nome →
+repo + versão + descrição só — atualizado manualmente a cada release). Pra
+usar o registry **ao vivo** do portal — que também traz `postSetup` (tema/
+blocos anexados a um arquétipo, ver `## Docker` abaixo) — aponte
+`QUANTHUM_REGISTRY` ou `--registry` pra ele:
+
+```bash
+quanthum-aquiles minha-app --frontend=react --registry https://architecture.quanthum.tec.br/registry.json
+# ou, testando local contra o portal rodando em localhost:
+quanthum-aquiles minha-app --frontend=react --registry http://localhost:8000/registry.json
+```
+
 ## Docker
 
 A imagem carrega Node + PHP 8.3 + Composer + git — não só Node — porque o
@@ -60,7 +72,7 @@ docker build -t quanthum-cli .
 ```
 
 - `GH_TOKEN` — só necessário pra clonar `quanthum-aquiles`/`quanthum-ulisses` (repos privados). Um PAT com `repo` read é suficiente.
-- `QUANTHUM_REGISTRY` — aponta pro registry.json ao vivo do portal em vez do estático bundlado na imagem; também aceita `--registry <url>` no comando.
+- `QUANTHUM_REGISTRY` — aponta pro registry.json ao vivo do portal em vez do estático bundlado na imagem; também aceita `--registry <url>` no comando. É o registry ao vivo que traz `postSetup` (tema/blocos anexados a um arquétipo no portal) — sem isso, o scaffold só roda o `setup` do `quanthum.json` do template.
 - Sem `-it` num pipeline não-interativo, sempre passe `--yes` + `--set CHAVE=valor` pra cada placeholder (senão o prompt do `@clack/prompts` falha por falta de TTY).
 
 ## Testes

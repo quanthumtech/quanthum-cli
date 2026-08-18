@@ -6,12 +6,13 @@ import { parseVariantFlags, runNew } from '@quanthum/cli';
 const [name, ...rest] = process.argv.slice(2);
 
 if (!name || name.startsWith('-')) {
-  console.error('Uso: quanthum-aquiles <nome-do-projeto> [--frontend=react|livewire-mary|livewire-daisy|livewire-tall] [--set CHAVE=valor] [--yes]');
+  console.error('Uso: quanthum-aquiles <nome-do-projeto> [--frontend=react|livewire-mary|livewire-daisy|livewire-tall] [--set CHAVE=valor] [--yes] [--registry <path-ou-url>]');
   process.exit(1);
 }
 
 const set = {};
 let interactive = true;
+let registryPath;
 
 for (let i = 0; i < rest.length; i++) {
   if (rest[i] === '--set') {
@@ -24,13 +25,19 @@ for (let i = 0; i < rest.length; i++) {
     set[key] = valueParts.join('=');
   } else if (rest[i] === '--yes') {
     interactive = false;
+  } else if (rest[i] === '--registry') {
+    // Espelha o --registry <path-ou-url> do `quanthum new` (commander) — sem
+    // isso, --registry era silenciosamente ignorado aqui e o wrapper sempre
+    // caía no registry.json estático bundlado, mesmo quando alguém pedia o
+    // ao vivo do portal (que é o que traz postSetup).
+    registryPath = rest[++i];
   }
 }
 
 const variants = parseVariantFlags(rest);
 
 try {
-  await runNew({ archetype: 'aquiles', name, set, variants, interactive });
+  await runNew({ archetype: 'aquiles', name, set, variants, interactive, registryPath });
 } catch (err) {
   console.error(`\n✖ ${err.message}`);
   process.exitCode = 1;

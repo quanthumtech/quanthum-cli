@@ -64,6 +64,16 @@ describe('quanthum-aquiles (wrapper)', () => {
     expect(marker.archetype).toBe('aquiles');
   });
 
+  it('--registry <url> aponta pro registry certo (não só a env QUANTHUM_REGISTRY)', async () => {
+    await execa('node', [binPath, 'minha-app-via-flag', '--set', 'APP_NAME=ViaFlag', '--yes', '--registry', registryPath], {
+      cwd: workDir,
+    });
+
+    const destDir = path.join(workDir, 'minha-app-via-flag');
+    expect(fs.existsSync(destDir)).toBe(true);
+    expect(fs.readFileSync(path.join(destDir, 'app.txt'), 'utf-8')).toBe('ViaFlag');
+  });
+
   it('sem argumento de nome, imprime uso e sai com código != 0', async () => {
     await expect(execa('node', [binPath], { cwd: workDir })).rejects.toMatchObject({
       exitCode: 1,
