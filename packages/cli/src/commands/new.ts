@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { printBanner } from '../banner.js';
 import { cloneTemplate, reinitGit } from '../clone.js';
 import { applyPlaceholders, resolvePlaceholderValues, type PlaceholderValues } from '../customize.js';
 import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manifest.js';
@@ -38,6 +39,8 @@ function readManifest(destDir: string): Manifest {
 }
 
 export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
+  printBanner();
+
   const cwd = options.cwd ?? process.cwd();
   const destDir = path.resolve(cwd, options.name);
 
