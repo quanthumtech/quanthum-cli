@@ -38,18 +38,33 @@ comando de novo atualiza (`git pull` + rebuild + relink).
   arquétipos (`quanthum-aquiles`, `quanthum-ulisses` — esses continuam
   privados) — sem isso o clone do template falha na hora de gerar o projeto
 
-**Windows (ex.: Laragon):** o comando acima é bash — não roda direto no
-PowerShell (`curl` lá é um alias de `Invoke-WebRequest`, que não entende
-flags tipo `-fsSL`; dá erro de "parâmetro não encontrado"). Duas opções:
+**Windows:** o comando acima é bash — não roda direto no PowerShell (`curl`
+lá é um alias de `Invoke-WebRequest`, que não entende flags tipo `-fsSL`; dá
+erro de "parâmetro não encontrado"). Use o instalador nativo do PowerShell,
+que não depende de bash nem de WSL nenhum:
 
-- Abrir o **Git Bash** (já vem com o Git for Windows que o Laragon usa) e
-  rodar o comando de lá; ou
-- Rodar isto direto no **PowerShell**, sem trocar de terminal — chama o
-  bash explicitamente por fora, então o `curl`/`|` de dentro das aspas já
-  são interpretados por ele, não pelo PowerShell:
-  ```powershell
-  bash -c "curl -fsSL https://raw.githubusercontent.com/quanthumtech/quanthum-cli/master/install.sh | bash"
-  ```
+```powershell
+irm https://raw.githubusercontent.com/quanthumtech/quanthum-cli/master/install.ps1 | iex
+```
+
+Faz o mesmo que o `install.sh` (clona em `~/.quanthum-cli`, builda, `npm
+link` nos dois pacotes) só que com cmdlets nativos do PowerShell.
+
+> **Por que não `bash -c "curl ... | bash"`?** Esse workaround (que este
+> README recomendava antes) só funciona se o `bash` que resolve no PATH for
+> o do Git for Windows. Muita instalação Windows também tem um `bash.exe`
+> legado em `C:\Windows\System32` — resquício do recurso opcional "Windows
+> Subsystem for Linux" — que é só um *relay* pra dentro de uma distro WSL.
+> Se esse `bash` vier primeiro no PATH (comum) e não houver nenhuma distro
+> WSL instalada/registrada, o relay falha com algo como
+> `WSL (nnnnn - Relay) ERROR: CreateProcessCommon:735: execvpe(/bin/bash)
+> failed: No such file or directory` — um erro do Windows, não do
+> quanthum-cli. O `install.ps1` evita esse problema inteiro rodando tudo
+> nativamente, sem tentar resolver um `bash` do PATH.
+
+Alternativa: abrir o **Git Bash** (já vem com o Git for Windows) e rodar o
+`curl ... | bash` original de lá — continua funcionando normalmente, já que
+nesse caso é o próprio Git Bash resolvendo `bash`, não o relay do WSL.
 
 Se o `npm link` reclamar de permissão pra criar symlink, ative o **Modo de
 Desenvolvedor** do Windows (Configurações → Sistema → Para desenvolvedores)
@@ -63,6 +78,16 @@ tudo dentro do container.
 ```bash
 quanthum-aquiles minha-app --frontend=react
 quanthum new aquiles minha-app --set APP_NAME=minha-app
+```
+
+Por padrão o progresso aparece limpo — um spinner por etapa (clonagem, git,
+variantes, cada comando de `setup`) e uma barra de progresso durante o
+setup; erro nenhum estoura stack trace bruto no terminal, é isolado num box
+destacado com a causa e sugestões de resolução. Pra ver a saída bruta de
+cada comando ao vivo (útil pra depurar), rode com `--verbose`:
+
+```bash
+quanthum-aquiles minha-app --frontend=react --verbose
 ```
 
 Por padrão isso lê o `registry.json` **estático** bundlado no pacote (nome →
