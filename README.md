@@ -38,9 +38,20 @@ comando de novo atualiza (`git pull` + rebuild + relink).
   arquétipos (`quanthum-aquiles`, `quanthum-ulisses` — esses continuam
   privados) — sem isso o clone do template falha na hora de gerar o projeto
 
-**Windows (ex.: Laragon):** rode o comando de instalação no **Git Bash**
-(já vem com o Git for Windows que o Laragon usa) — não é PowerShell/cmd. Se
-o `npm link` reclamar de permissão pra criar symlink, ative o **Modo de
+**Windows (ex.: Laragon):** o comando acima é bash — não roda direto no
+PowerShell (`curl` lá é um alias de `Invoke-WebRequest`, que não entende
+flags tipo `-fsSL`; dá erro de "parâmetro não encontrado"). Duas opções:
+
+- Abrir o **Git Bash** (já vem com o Git for Windows que o Laragon usa) e
+  rodar o comando de lá; ou
+- Rodar isto direto no **PowerShell**, sem trocar de terminal — chama o
+  bash explicitamente por fora, então o `curl`/`|` de dentro das aspas já
+  são interpretados por ele, não pelo PowerShell:
+  ```powershell
+  bash -c "curl -fsSL https://raw.githubusercontent.com/quanthumtech/quanthum-cli/master/install.sh | bash"
+  ```
+
+Se o `npm link` reclamar de permissão pra criar symlink, ative o **Modo de
 Desenvolvedor** do Windows (Configurações → Sistema → Para desenvolvedores)
 ou rode esse passo uma vez como Administrador.
 
