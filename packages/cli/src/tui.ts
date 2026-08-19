@@ -73,10 +73,14 @@ export async function execTracked(
       return;
     }
 
+    // stdin herdado mesmo aqui (só stdout/stderr são capturados): um comando
+    // de setup/postSetup mal configurado (sem -y/-o) pode cair num prompt de
+    // confirmação — sem stdin herdado, esse prompt trava pra sempre (pipe
+    // que nunca recebe nada), sem nem dar pra responder às cegas.
     if (options.shell) {
-      await execa(command, { cwd, shell: options.shell, all: true });
+      await execa(command, { cwd, shell: options.shell, stdin: 'inherit', all: true });
     } else {
-      await execa(command, args, { cwd, all: true });
+      await execa(command, args, { cwd, stdin: 'inherit', all: true });
     }
   } catch (err) {
     const execaErr = err as { all?: string; shortMessage?: string; message: string };
@@ -102,11 +106,24 @@ function truncateForLine(label: string, reserve: number): string {
  * "apaga até o fim da linha" (sem mover linha), e não registra listener
  * nenhum.
  */
+// A partir daqui, se o step ainda não terminou, pode não ser só "demorado" —
+// comando de setup/postSetup sem -y/-o pode ter caído num prompt de
+// confirmação que a captura de stdio deixa invisível (stdin é herdado, mas o
+// texto da pergunta em si não é — ver execTracked). Aviso, não silêncio.
+const STUCK_HINT_MS = 8_000;
+const STUCK_HINT = `${YELLOW}⚠ ainda rodando — se parece travado de vez, pode ser um prompt de confirmação escondido atrás do spinner (comando sem -y/-o). Ctrl+C e rode de novo com --verbose pra ver.${RESET}`;
+
 function createSpinner(): { start(label: string): void; stop(label: string): void } {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
+  let startedAt = 0;
+  let hintShown = false;
 
   function render(label: string): void {
+    if (!hintShown && Date.now() - startedAt > STUCK_HINT_MS) {
+      hintShown = true;
+      process.stdout.write(`\n${STUCK_HINT}\n`);
+    }
     const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
     process.stdout.write(`\r\x1b[K${GREEN}${glyph}${RESET} ${truncateForLine(label, 4)}`);
     frame += 1;
@@ -115,6 +132,8 @@ function createSpinner(): { start(label: string): void; stop(label: string): voi
   return {
     start(label: string) {
       frame = 0;
+      startedAt = Date.now();
+      hintShown = false;
       render(label);
       timer = setInterval(() => render(label), 90);
       timer.unref?.();
