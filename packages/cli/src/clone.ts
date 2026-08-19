@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execTracked } from './tui.js';
+import { execTracked, runTrackedCommand } from './tui.js';
 
 export async function cloneTemplate(repo: string, version: string, destDir: string): Promise<void> {
   const args = ['clone', '--depth', '1'];
@@ -8,7 +8,10 @@ export async function cloneTemplate(repo: string, version: string, destDir: stri
     args.push('--branch', version);
   }
   args.push(repo, destDir);
-  await execTracked('git', args, process.cwd());
+  // runTrackedCommand (não execTracked): git pedindo usuário/senha (repo
+  // privado sem credencial cacheada) é um prompt real que fica escondido
+  // atrás do spinner — precisa do mecanismo de revelar saída se demorar.
+  await runTrackedCommand(`Clonando ${repo} (${version})`, 'git', args, process.cwd());
 }
 
 /** Remove o histórico git do template e começa um novo, limpo, a partir do scaffold. */

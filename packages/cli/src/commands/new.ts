@@ -59,7 +59,9 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
 
   const entry = await resolveArchetype(options.archetype, options.registryPath);
 
-  await step(`Clonando ${entry.repo} (${entry.version})`, () => cloneTemplate(entry.repo, entry.version, destDir));
+  // cloneTemplate já mostra o próprio progresso (runTrackedCommand) — não
+  // precisa de um step() por fora envolvendo.
+  await cloneTemplate(entry.repo, entry.version, destDir);
 
   await step('Recriando histórico git', () => reinitGit(destDir, options.archetype, entry.version));
 

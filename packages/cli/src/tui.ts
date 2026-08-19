@@ -52,10 +52,19 @@ export class CommandError extends Error {
   }
 }
 
+function toCommandError(err: unknown): CommandError {
+  const execaErr = err as { all?: string; shortMessage?: string; message: string };
+  return new CommandError(execaErr.shortMessage ?? execaErr.message, execaErr.all);
+}
+
 /**
- * Roda um processo externo. Em modo verboso, herda o stdio (comportamento
- * antigo, saída ao vivo linha a linha). Fora dele, captura tudo — quem chama
- * decide se mostra (spinner cobre a espera; a saída só aparece se der erro).
+ * Roda um processo externo simples (git init/config/add/commit — local,
+ * instantâneo, nunca pede input). Em modo verboso, herda o stdio (saída ao
+ * vivo). Fora dele, captura stdout/stderr (stdin continua herdado) — quem
+ * chama decide se mostra (a saída só aparece se der erro). Pra comandos que
+ * podem legitimamente demorar ou pedir confirmação (git clone, setup),
+ * use `runTrackedCommand` — este aqui não tem o mecanismo de "revelar saída
+ * ao vivo se travar".
  */
 export async function execTracked(
   command: string,
@@ -73,18 +82,13 @@ export async function execTracked(
       return;
     }
 
-    // stdin herdado mesmo aqui (só stdout/stderr são capturados): um comando
-    // de setup/postSetup mal configurado (sem -y/-o) pode cair num prompt de
-    // confirmação — sem stdin herdado, esse prompt trava pra sempre (pipe
-    // que nunca recebe nada), sem nem dar pra responder às cegas.
     if (options.shell) {
       await execa(command, { cwd, shell: options.shell, stdin: 'inherit', all: true });
     } else {
       await execa(command, args, { cwd, stdin: 'inherit', all: true });
     }
   } catch (err) {
-    const execaErr = err as { all?: string; shortMessage?: string; message: string };
-    throw new CommandError(execaErr.shortMessage ?? execaErr.message, execaErr.all);
+    throw toCommandError(err);
   }
 }
 
@@ -106,24 +110,11 @@ function truncateForLine(label: string, reserve: number): string {
  * "apaga até o fim da linha" (sem mover linha), e não registra listener
  * nenhum.
  */
-// A partir daqui, se o step ainda não terminou, pode não ser só "demorado" —
-// comando de setup/postSetup sem -y/-o pode ter caído num prompt de
-// confirmação que a captura de stdio deixa invisível (stdin é herdado, mas o
-// texto da pergunta em si não é — ver execTracked). Aviso, não silêncio.
-const STUCK_HINT_MS = 8_000;
-const STUCK_HINT = `${YELLOW}⚠ ainda rodando — se parece travado de vez, pode ser um prompt de confirmação escondido atrás do spinner (comando sem -y/-o). Ctrl+C e rode de novo com --verbose pra ver.${RESET}`;
-
-function createSpinner(): { start(label: string): void; stop(label: string): void } {
+function createSpinner(): { start(label: string): void; pause(): void; stop(label: string): void } {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
-  let startedAt = 0;
-  let hintShown = false;
 
   function render(label: string): void {
-    if (!hintShown && Date.now() - startedAt > STUCK_HINT_MS) {
-      hintShown = true;
-      process.stdout.write(`\n${STUCK_HINT}\n`);
-    }
     const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
     process.stdout.write(`\r\x1b[K${GREEN}${glyph}${RESET} ${truncateForLine(label, 4)}`);
     frame += 1;
@@ -132,11 +123,17 @@ function createSpinner(): { start(label: string): void; stop(label: string): voi
   return {
     start(label: string) {
       frame = 0;
-      startedAt = Date.now();
-      hintShown = false;
       render(label);
       timer = setInterval(() => render(label), 90);
       timer.unref?.();
+    },
+    /** Para a animação e limpa a linha sem escrever um label final — usado antes de revelar saída ao vivo. */
+    pause() {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      process.stdout.write('\r\x1b[K');
     },
     stop(label: string) {
       if (timer) {
@@ -149,9 +146,10 @@ function createSpinner(): { start(label: string): void; stop(label: string): voi
 }
 
 /**
- * Envolve uma etapa lógica (pode conter vários `execTracked`) com spinner —
- * ou, sem TTY (pipeline/CI sem `-it`), com uma linha só por etapa, sem
- * cursor tricks poluindo o log.
+ * Envolve uma etapa lógica que não é ela mesma um processo externo (ex.: o
+ * bundle de `git init/config/add/commit` do reinitGit) com spinner — ou, sem
+ * TTY (pipeline/CI sem `-it`), com uma linha só por etapa, sem cursor tricks
+ * poluindo o log.
  */
 export async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   if (!process.stdout.isTTY || verboseEnabled) {
@@ -173,6 +171,115 @@ export async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     s.stop(`${RED}✖${RESET} ${label}`);
     throw err;
+  }
+}
+
+/**
+ * Passado esse tanto de tempo sem terminar, o comando pode não estar só
+ * "demorado" — pode ter caído num prompt de confirmação que a captura de
+ * stdio deixa invisível (`git clone` pedindo usuário/senha, `npx shadcn add`
+ * com um menu de seleção em tela cheia etc. — visto ao vivo: nem sempre é
+ * um simples "y/n", às vezes é um menu com setinha que precisa aparecer pra
+ * dar pra navegar). Em vez de só avisar, revela a saída capturada até agora
+ * e passa a espelhar o que for chegando dali em diante — stdin já está
+ * herdado, então dá pra responder normalmente assim que a pergunta aparecer.
+ */
+const STUCK_REVEAL_MS = 20_000;
+
+/**
+ * Roda um comando externo que pode legitimamente demorar (rede) ou pedir
+ * confirmação (git clone com credencial, setup/postSetup de template) —
+ * spinner de uma linha só enquanto roda liso, e se passar de
+ * `STUCK_REVEAL_MS` sem terminar, revela a saída ao vivo (a acumulada até
+ * agora + o que for chegando), porque pode ser um prompt escondido atrás do
+ * spinner esperando resposta.
+ */
+export async function runTrackedCommand(
+  label: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  options: { shell?: boolean | string } = {},
+): Promise<void> {
+  if (verboseEnabled) {
+    log.step(label);
+    try {
+      if (options.shell) {
+        await execa(command, { cwd, shell: options.shell, stdio: 'inherit' });
+      } else {
+        await execa(command, args, { cwd, stdio: 'inherit' });
+      }
+    } catch (err) {
+      throw toCommandError(err);
+    }
+    return;
+  }
+
+  if (!process.stdout.isTTY) {
+    // Sem TTY não tem como o usuário ver/responder prompt nenhum de qualquer
+    // forma — mantém só captura (convenção já documentada: comandos aqui
+    // precisam ser não-interativos, ex. Docker/CI sem -it).
+    log.step(label);
+    try {
+      if (options.shell) {
+        await execa(command, { cwd, shell: options.shell, stdin: 'inherit', all: true });
+      } else {
+        await execa(command, args, { cwd, stdin: 'inherit', all: true });
+      }
+    } catch (err) {
+      log.error(label);
+      throw toCommandError(err);
+    }
+    return;
+  }
+
+  const subprocess = options.shell
+    ? execa(command, { cwd, shell: options.shell, stdin: 'inherit', all: true })
+    : execa(command, args, { cwd, stdin: 'inherit', all: true });
+
+  const spin = createSpinner();
+  spin.start(label);
+
+  let revealed = false;
+  let buffered = '';
+  const revealTimer = setTimeout(() => {
+    revealed = true;
+    spin.pause();
+    process.stdout.write(
+      `${YELLOW}⚠ "${truncateForLine(label, 0)}" ainda rodando depois de ${Math.round(STUCK_REVEAL_MS / 1000)}s — mostrando a saída ao vivo (pode ter um prompt esperando resposta; responda normalmente):${RESET}\n`,
+    );
+    if (buffered) {
+      process.stdout.write(buffered);
+      buffered = '';
+    }
+  }, STUCK_REVEAL_MS);
+  revealTimer.unref?.();
+
+  subprocess.all?.on('data', (chunk: Buffer) => {
+    const text = chunk.toString('utf-8');
+    if (revealed) {
+      process.stdout.write(text);
+    } else {
+      buffered = (buffered + text).slice(-20_000);
+    }
+  });
+
+  try {
+    await subprocess;
+    clearTimeout(revealTimer);
+    if (revealed) {
+      console.log(`${GREEN}✔${RESET} ${label}`);
+    } else {
+      spin.stop(`${GREEN}✔${RESET} ${label}`);
+    }
+  } catch (err) {
+    clearTimeout(revealTimer);
+    if (revealed) {
+      console.log(`${RED}✖${RESET} ${label}`);
+    } else {
+      spin.stop(`${RED}✖${RESET} ${label}`);
+    }
+    throw toCommandError(err);
   }
 }
 
