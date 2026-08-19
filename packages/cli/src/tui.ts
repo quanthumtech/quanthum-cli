@@ -41,6 +41,18 @@ function terminalWidth(): number {
   return Math.min(process.stdout.columns || 80, 88);
 }
 
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+/** Escreve `right` colado na borda direita do terminal, na mesma linha de `left` — usado pro "NN%" ao lado do label. */
+function withRightAligned(left: string, right: string): string {
+  const width = terminalWidth();
+  const gap = width - stripAnsi(left).length - stripAnsi(right).length;
+  return gap > 1 ? `${left}${' '.repeat(gap)}${right}` : `${left} ${right}`;
+}
+
 /** Erro de um comando externo que falhou — carrega a saída capturada pra exibição no box de erro. */
 export class CommandError extends Error {
   constructor(
@@ -110,7 +122,11 @@ function truncateForLine(label: string, reserve: number): string {
  * "apaga até o fim da linha" (sem mover linha), e não registra listener
  * nenhum.
  */
-function createSpinner(): { start(label: string): void; pause(): void; stop(label: string): void } {
+function createSpinner(): {
+  start(label: string): void;
+  pause(): void;
+  stop(label: string, progress?: string): void;
+} {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
 
@@ -135,12 +151,15 @@ function createSpinner(): { start(label: string): void; pause(): void; stop(labe
       }
       process.stdout.write('\r\x1b[K');
     },
-    stop(label: string) {
+    /** `progress` (ex. "40%") fica colado na borda direita, na mesma linha — evita uma linha extra só pra barra. */
+    stop(label: string, progress?: string) {
       if (timer) {
         clearInterval(timer);
         timer = undefined;
       }
-      process.stdout.write(`\r\x1b[K${truncateForLine(label, 0)}\n`);
+      const reserve = progress ? progress.length + 2 : 0;
+      const line = truncateForLine(label, reserve);
+      process.stdout.write(`\r\x1b[K${progress ? withRightAligned(line, `${DIM}${progress}${RESET}`) : line}\n`);
     },
   };
 }
@@ -151,9 +170,9 @@ function createSpinner(): { start(label: string): void; pause(): void; stop(labe
  * TTY (pipeline/CI sem `-it`), com uma linha só por etapa, sem cursor tricks
  * poluindo o log.
  */
-export async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
+export async function step<T>(label: string, fn: () => Promise<T>, progress?: string): Promise<T> {
   if (!process.stdout.isTTY || verboseEnabled) {
-    log.step(label);
+    log.step(progress ? `${label} (${progress})` : label);
     try {
       return await fn();
     } catch (err) {
@@ -166,33 +185,41 @@ export async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   s.start(label);
   try {
     const result = await fn();
-    s.stop(`${GREEN}✔${RESET} ${label}`);
+    s.stop(`${GREEN}✔${RESET} ${label}`, progress);
     return result;
   } catch (err) {
-    s.stop(`${RED}✖${RESET} ${label}`);
+    s.stop(`${RED}✖${RESET} ${label}`, progress);
     throw err;
   }
 }
 
 /**
- * Passado esse tanto de tempo sem terminar, o comando pode não estar só
- * "demorado" — pode ter caído num prompt de confirmação que a captura de
- * stdio deixa invisível (`git clone` pedindo usuário/senha, `npx shadcn add`
- * com um menu de seleção em tela cheia etc. — visto ao vivo: nem sempre é
- * um simples "y/n", às vezes é um menu com setinha que precisa aparecer pra
- * dar pra navegar). Em vez de só avisar, revela a saída capturada até agora
- * e passa a espelhar o que for chegando dali em diante — stdin já está
- * herdado, então dá pra responder normalmente assim que a pergunta aparecer.
+ * Se o comando ficar `IDLE_REVEAL_MS` sem produzir nenhuma saída (não "sem
+ * terminar" — sem *saída*), ele pode ter caído num prompt de confirmação que
+ * a captura de stdio deixa invisível (`git clone` pedindo usuário/senha,
+ * `npx shadcn add` com um menu de seleção em tela cheia etc. — visto ao vivo:
+ * nem sempre é um simples "y/n", às vezes é um menu com setinha que precisa
+ * aparecer pra dar pra navegar). Baseado em ociosidade (não em tempo total
+ * decorrido) porque comandos legítimos e lentos mas que streamam saída sem
+ * parar (`npm install`, `npx shadcn add` baixando registry) NÃO estão presos
+ * — só ficam mais devagar que 20s; um prompt escondido, ao contrário, para de
+ * produzir qualquer saída até alguém responder. `MIN_ELAPSED_MS` evita
+ * revelar por causa de uma pausa curta e normal logo no início do comando.
+ * Em vez de só avisar, revela a saída capturada até agora e passa a espelhar
+ * o que for chegando dali em diante — stdin já está herdado, então dá pra
+ * responder normalmente assim que a pergunta aparecer.
  */
-const STUCK_REVEAL_MS = 20_000;
+const IDLE_REVEAL_MS = 12_000;
+const MIN_ELAPSED_MS = 8_000;
 
 /**
  * Roda um comando externo que pode legitimamente demorar (rede) ou pedir
  * confirmação (git clone com credencial, setup/postSetup de template) —
- * spinner de uma linha só enquanto roda liso, e se passar de
- * `STUCK_REVEAL_MS` sem terminar, revela a saída ao vivo (a acumulada até
- * agora + o que for chegando), porque pode ser um prompt escondido atrás do
- * spinner esperando resposta.
+ * spinner de uma linha só enquanto roda liso, e se ficar `IDLE_REVEAL_MS`
+ * sem produzir saída nenhuma, revela a saída ao vivo (a acumulada até agora +
+ * o que for chegando), porque pode ser um prompt escondido atrás do spinner
+ * esperando resposta. `progress` (ex. "40%"), se passado, fica colado na
+ * borda direita da linha final — não gera uma linha extra só pra barra.
  */
 export async function runTrackedCommand(
   label: string,
@@ -200,9 +227,10 @@ export async function runTrackedCommand(
   args: string[],
   cwd: string,
   options: { shell?: boolean | string } = {},
+  progress?: string,
 ): Promise<void> {
   if (verboseEnabled) {
-    log.step(label);
+    log.step(progress ? `${label} (${progress})` : label);
     try {
       if (options.shell) {
         await execa(command, { cwd, shell: options.shell, stdio: 'inherit' });
@@ -219,7 +247,7 @@ export async function runTrackedCommand(
     // Sem TTY não tem como o usuário ver/responder prompt nenhum de qualquer
     // forma — mantém só captura (convenção já documentada: comandos aqui
     // precisam ser não-interativos, ex. Docker/CI sem -it).
-    log.step(label);
+    log.step(progress ? `${label} (${progress})` : label);
     try {
       if (options.shell) {
         await execa(command, { cwd, shell: options.shell, stdin: 'inherit', all: true });
@@ -242,20 +270,34 @@ export async function runTrackedCommand(
 
   let revealed = false;
   let buffered = '';
-  const revealTimer = setTimeout(() => {
+  const startedAt = Date.now();
+  let lastOutputAt = startedAt;
+
+  function reveal(): void {
     revealed = true;
     spin.pause();
     process.stdout.write(
-      `${YELLOW}⚠ "${truncateForLine(label, 0)}" ainda rodando depois de ${Math.round(STUCK_REVEAL_MS / 1000)}s — mostrando a saída ao vivo (pode ter um prompt esperando resposta; responda normalmente):${RESET}\n`,
+      `${YELLOW}⚠ "${truncateForLine(label, 0)}" sem saída há ${Math.round(IDLE_REVEAL_MS / 1000)}s — mostrando ao vivo (pode ter um prompt esperando resposta; responda normalmente):${RESET}\n`,
     );
     if (buffered) {
       process.stdout.write(buffered);
       buffered = '';
     }
-  }, STUCK_REVEAL_MS);
-  revealTimer.unref?.();
+  }
+
+  const idleCheck = setInterval(() => {
+    if (revealed) {
+      return;
+    }
+    const now = Date.now();
+    if (now - startedAt >= MIN_ELAPSED_MS && now - lastOutputAt >= IDLE_REVEAL_MS) {
+      reveal();
+    }
+  }, 1000);
+  idleCheck.unref?.();
 
   subprocess.all?.on('data', (chunk: Buffer) => {
+    lastOutputAt = Date.now();
     const text = chunk.toString('utf-8');
     if (revealed) {
       process.stdout.write(text);
@@ -266,36 +308,38 @@ export async function runTrackedCommand(
 
   try {
     await subprocess;
-    clearTimeout(revealTimer);
+    clearInterval(idleCheck);
     if (revealed) {
-      console.log(`${GREEN}✔${RESET} ${label}`);
+      const line = `${GREEN}✔${RESET} ${label}`;
+      console.log(progress ? withRightAligned(line, `${DIM}${progress}${RESET}`) : line);
     } else {
-      spin.stop(`${GREEN}✔${RESET} ${label}`);
+      spin.stop(`${GREEN}✔${RESET} ${label}`, progress);
     }
   } catch (err) {
-    clearTimeout(revealTimer);
+    clearInterval(idleCheck);
     if (revealed) {
       console.log(`${RED}✖${RESET} ${label}`);
     } else {
-      spin.stop(`${RED}✖${RESET} ${label}`);
+      spin.stop(`${RED}✖${RESET} ${label}`, progress);
     }
     throw toCommandError(err);
   }
 }
 
-function renderProgressBar(current: number, total: number, width = 30): string {
-  const ratio = total > 0 ? current / total : 1;
-  const filled = Math.round(width * ratio);
-  const bar = '█'.repeat(filled) + '░'.repeat(Math.max(0, width - filled));
-  const pct = Math.round(ratio * 100);
-  return `${GREEN}[${bar}]${RESET} ${pct}% | ${current}/${total} comandos`;
+/** Formata "current/total" como percentual pra colar na borda direita da linha do comando (ver `step`/`runTrackedCommand`). */
+export function formatProgress(current: number, total: number): string {
+  const pct = total > 0 ? Math.round((current / total) * 100) : 100;
+  return `${pct}%`;
 }
 
-export function printSetupProgress(current: number, total: number): void {
-  if (total <= 1) {
-    return;
-  }
-  console.log(`  ${DIM}Progresso do setup${RESET}  ${renderProgressBar(current, total)}`);
+/**
+ * Anúncio de seção sem spinner (ex. "Aplicando placeholders" antes de um
+ * prompt interativo que não pode conviver com o spinner rodando) — uma linha
+ * só, sem os marcadores ◇/│ do @clack/prompts, pra manter o mesmo estilo
+ * visual do resto do output (✔/spinner).
+ */
+export function note(label: string): void {
+  console.log(`${DIM}${label}${RESET}`);
 }
 
 export function printBanner(archetype: string, target: string, flagsSummary: string): void {

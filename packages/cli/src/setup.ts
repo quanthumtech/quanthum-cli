@@ -1,4 +1,4 @@
-import { printSetupProgress, runTrackedCommand } from './tui.js';
+import { formatProgress, runTrackedCommand } from './tui.js';
 
 /**
  * `shell: true` deixa o Node escolher o shell padrão do SO — no Windows isso é
@@ -19,8 +19,15 @@ export async function runSetup(destDir: string, commands: string[]): Promise<voi
     // runTrackedCommand: comandos de setup/postSetup são arbitrários (do
     // template ou configurados no portal) e podem legitimamente pedir
     // confirmação (ex.: npx shadcn add sem -y/-o) — precisa do mecanismo de
-    // revelar saída ao vivo se demorar de mais.
-    await runTrackedCommand(`[${index}/${total}] ${command}`, command, [], destDir, { shell: 'bash' });
-    printSetupProgress(index, total);
+    // revelar saída ao vivo se ficar ocioso de mais. O percentual vai colado
+    // na própria linha do comando (progress) — sem linha extra só pra barra.
+    await runTrackedCommand(
+      `[${index}/${total}] ${command}`,
+      command,
+      [],
+      destDir,
+      { shell: 'bash' },
+      total > 1 ? formatProgress(index, total) : undefined,
+    );
   }
 }

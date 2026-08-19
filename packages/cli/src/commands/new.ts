@@ -8,7 +8,7 @@ import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manif
 import { resolveArchetype } from '../registry.js';
 import { reportProject } from '../report.js';
 import { runSetup } from '../setup.js';
-import { printBanner, printSuccess, printVerboseHint, step } from '../tui.js';
+import { note, printBanner, printSuccess, printVerboseHint, step } from '../tui.js';
 import { applyVariants, cleanupVariantDirs, resolveVariantChoices, type VariantChoices } from '../variants.js';
 
 export interface RunNewOptions {
@@ -74,14 +74,19 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
     const summary = Object.entries(variantChoices)
       .map(([axis, choice]) => `${axis}=${choice}`)
       .join(', ');
-    log.step(`Aplicando variantes (${summary})`);
-    variantSetup = applyVariants(destDir, manifest, variantChoices);
-    cleanupVariantDirs(destDir, manifest);
+    variantSetup = await step(`Aplicando variantes (${summary})`, async () => {
+      const setupCommands = applyVariants(destDir, manifest, variantChoices);
+      cleanupVariantDirs(destDir, manifest);
+      return setupCommands;
+    });
   }
 
-  log.step('Aplicando placeholders');
+  // resolvePlaceholderValues pode abrir um prompt interativo do @clack/prompts
+  // (o texto da pergunta já se explica sozinho) — não dá pra rodar com um
+  // spinner nosso por cima, então só o passo puramente mecânico (a escrita
+  // nos arquivos) entra no step().
   const values = await resolvePlaceholderValues(manifest, options.set ?? {}, interactive);
-  applyPlaceholders(destDir, manifest, values);
+  await step('Aplicando placeholders', async () => applyPlaceholders(destDir, manifest, values));
 
   const markerPath = path.join(destDir, '.quanthum-archetype');
   fs.writeFileSync(
@@ -118,7 +123,7 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
   }
 
   if (setupCommands.length > 0) {
-    log.step(`Rodando setup (${setupCommands.length} comando${setupCommands.length > 1 ? 's' : ''})`);
+    note(`Rodando setup (${setupCommands.length} comando${setupCommands.length > 1 ? 's' : ''})`);
     await runSetup(destDir, setupCommands);
   }
 
