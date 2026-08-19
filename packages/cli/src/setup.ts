@@ -1,9 +1,19 @@
 import { execa } from 'execa';
 
-/** Roda, em sequência, os comandos de `setup` do manifesto, com output ao vivo. */
+/**
+ * `shell: true` deixa o Node escolher o shell padrão do SO — no Windows isso é
+ * cmd.exe, não bash. Todo comando de `setup`/`postSetup` que este motor roda
+ * (aqui, nos templates, e o que o portal gera pra tema/blocos anexados) é
+ * escrito em sintaxe POSIX (`&&`, subshells `(...)`, `sed`, `printf`, redirects
+ * tipo `2>/dev/null`) — no cmd.exe isso quebra com erro de sintaxe genérico
+ * (reproduzido ao vivo: aspas duplicadas, "A sintaxe do comando está
+ * incorreta"). Forçar bash explicitamente, em vez de deixar o SO escolher,
+ * resolve pra Windows (usa o bash do Git for Windows, que a instalação do
+ * CLI já exige) sem mudar nada em Linux/macOS (onde já era compatível).
+ */
 export async function runSetup(destDir: string, commands: string[]): Promise<void> {
   for (const command of commands) {
     console.log(`\n$ ${command}`);
-    await execa(command, { cwd: destDir, shell: true, stdio: 'inherit' });
+    await execa(command, { cwd: destDir, shell: 'bash', stdio: 'inherit' });
   }
 }
