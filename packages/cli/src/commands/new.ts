@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { printBanner } from '../banner.js';
+import { log } from '@clack/prompts';
+import { printBanner as printWordmark } from '../banner.js';
 import { cloneTemplate, reinitGit } from '../clone.js';
 import { applyPlaceholders, resolvePlaceholderValues, type PlaceholderValues } from '../customize.js';
 import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manifest.js';
 import { resolveArchetype } from '../registry.js';
 import { reportProject } from '../report.js';
 import { runSetup } from '../setup.js';
+import { printBanner, printSuccess, printVerboseHint, step } from '../tui.js';
 import { applyVariants, cleanupVariantDirs, resolveVariantChoices, type VariantChoices } from '../variants.js';
 
 export interface RunNewOptions {
@@ -40,7 +42,7 @@ function readManifest(destDir: string): Manifest {
 }
 
 export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
-  printBanner();
+  printWordmark();
 
   const cwd = options.cwd ?? process.cwd();
   const destDir = path.resolve(cwd, options.name);
@@ -49,13 +51,17 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
     throw new Error(`O diretório "${options.name}" já existe.`);
   }
 
+  const flagsSummary = Object.entries(options.variants ?? {})
+    .map(([axis, choice]) => `--${axis}=${choice}`)
+    .join(' ');
+  printBanner(options.archetype, `./${options.name}`, flagsSummary);
+  printVerboseHint();
+
   const entry = await resolveArchetype(options.archetype, options.registryPath);
 
-  console.log(`→ Clonando ${entry.repo} (${entry.version})...`);
-  await cloneTemplate(entry.repo, entry.version, destDir);
+  await step(`Clonando ${entry.repo} (${entry.version})`, () => cloneTemplate(entry.repo, entry.version, destDir));
 
-  console.log('→ Recriando histórico git...');
-  await reinitGit(destDir, options.archetype, entry.version);
+  await step('Recriando histórico git', () => reinitGit(destDir, options.archetype, entry.version));
 
   const manifest = readManifest(destDir);
   const interactive = options.interactive ?? true;
@@ -63,16 +69,15 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
   const variantChoices = await resolveVariantChoices(manifest, options.variants ?? {}, interactive);
   let variantSetup: string[] = [];
   if (Object.keys(manifest.variants).length > 0) {
-    console.log(
-      `→ Aplicando variantes (${Object.entries(variantChoices)
-        .map(([axis, choice]) => `${axis}=${choice}`)
-        .join(', ')})...`,
-    );
+    const summary = Object.entries(variantChoices)
+      .map(([axis, choice]) => `${axis}=${choice}`)
+      .join(', ');
+    log.step(`Aplicando variantes (${summary})`);
     variantSetup = applyVariants(destDir, manifest, variantChoices);
     cleanupVariantDirs(destDir, manifest);
   }
 
-  console.log('→ Aplicando placeholders...');
+  log.step('Aplicando placeholders');
   const values = await resolvePlaceholderValues(manifest, options.set ?? {}, interactive);
   applyPlaceholders(destDir, manifest, values);
 
@@ -103,20 +108,19 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
   const setupCommands = [...manifest.setup, ...variantSetup, ...(skipPostSetup ? [] : postSetup)];
 
   if (skipPostSetup) {
-    console.log(
-      `→ Pulando o setup extra do registry (tema/blocos) — a variante escolhida (${Object.entries(variantChoices)
+    log.warn(
+      `Pulando o setup extra do registry (tema/blocos) — a variante escolhida (${Object.entries(variantChoices)
         .map(([axis, choice]) => `${axis}=${choice}`)
         .join(', ')}) não declara suporte a isso no quanthum.json.`,
     );
   }
 
   if (setupCommands.length > 0) {
-    console.log('→ Rodando setup...');
+    log.step(`Rodando setup (${setupCommands.length} comando${setupCommands.length > 1 ? 's' : ''})`);
     await runSetup(destDir, setupCommands);
   }
 
-  console.log(`\n✔ Projeto "${options.name}" criado a partir de "${options.archetype}".`);
-  console.log(`  cd ${options.name}`);
+  printSuccess(`Projeto "${options.name}" criado a partir de "${options.archetype}".`, `cd ${options.name}`);
 
   // Best-effort, silencioso — ver docblock de reportProject(). Precisa de
   // await (não fire-and-forget): o processo Node termina assim que runNew()

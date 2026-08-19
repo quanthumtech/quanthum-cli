@@ -10,3 +10,4 @@ export { resolveArchetype, loadRegistry, DEFAULT_LIVE_REGISTRY_URL } from './reg
 export type { Registry, RegistryEntry } from './registry.js';
 export { parseVariantFlags } from './variant-flags.js';
 export type { VariantChoices } from './variants.js';
+export { printErrorBox, setVerbose } from './tui.js';

@@ -1,4 +1,4 @@
-import { execa } from 'execa';
+import { execTracked, printSetupProgress, step } from './tui.js';
 
 /**
  * `shell: true` deixa o Node escolher o shell padrão do SO — no Windows isso é
@@ -12,8 +12,11 @@ import { execa } from 'execa';
  * CLI já exige) sem mudar nada em Linux/macOS (onde já era compatível).
  */
 export async function runSetup(destDir: string, commands: string[]): Promise<void> {
+  const total = commands.length;
+  let index = 0;
   for (const command of commands) {
-    console.log(`\n$ ${command}`);
-    await execa(command, { cwd: destDir, shell: 'bash', stdio: 'inherit' });
+    index += 1;
+    await step(`[${index}/${total}] ${command}`, () => execTracked(command, [], destDir, { shell: 'bash' }));
+    printSetupProgress(index, total);
   }
 }

@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { runNew } from './commands/new.js';
 import { DEFAULT_LIVE_REGISTRY_URL } from './registry.js';
+import { printErrorBox, setVerbose } from './tui.js';
 import { parseVariantFlags } from './variant-flags.js';
 
 function collectSet(value: string, previous: Record<string, string>): Record<string, string> {
@@ -22,6 +23,7 @@ program
   .description('Cria um novo projeto a partir de um arquétipo do registry')
   .option('--set <CHAVE=valor>', 'Define um placeholder sem prompt interativo (repetível)', collectSet, {})
   .option('--yes', 'Modo não interativo — falha se faltar algum --set ou variante', false)
+  .option('--verbose', 'Mostra a saída bruta (stdio herdado) de cada comando em vez do spinner/resumo', false)
   // [valor] (não <valor>): opcional — "--registry" sozinho, sem URL, usa
   // DEFAULT_LIVE_REGISTRY_URL (o registry ao vivo oficial da Quanthum).
   .option('--registry [path-ou-url]', `Registry alternativo — caminho local, URL http(s), ou vazio pro ao vivo oficial (${DEFAULT_LIVE_REGISTRY_URL})`)
@@ -30,6 +32,7 @@ program
   // essas flags, e parseVariantFlags() as extrai do argv cru abaixo.
   .allowUnknownOption()
   .action(async (archetype: string, name: string, opts) => {
+    setVerbose(Boolean(opts.verbose));
     try {
       await runNew({
         archetype,
@@ -42,7 +45,7 @@ program
         registryPath: opts.registry === true ? DEFAULT_LIVE_REGISTRY_URL : opts.registry,
       });
     } catch (err) {
-      console.error(`\n✖ ${(err as Error).message}`);
+      printErrorBox(err);
       process.exitCode = 1;
     }
   });

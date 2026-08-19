@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Wrapper fino: mesmo motor do `quanthum`, arquétipo fixo em "aquiles".
 // Nenhuma lógica de scaffolding vive aqui — só parsing de argv chamando runNew().
-import { DEFAULT_LIVE_REGISTRY_URL, parseVariantFlags, runNew } from '@quanthum/cli';
+import { DEFAULT_LIVE_REGISTRY_URL, parseVariantFlags, printErrorBox, runNew, setVerbose } from '@quanthum/cli';
 
 const [name, ...rest] = process.argv.slice(2);
 
 if (!name || name.startsWith('-')) {
-  console.error('Uso: quanthum-aquiles <nome-do-projeto> [--frontend=react|livewire-mary|livewire-daisy|livewire-tall] [--set CHAVE=valor] [--yes] [--registry [path-ou-url]]');
+  console.error('Uso: quanthum-aquiles <nome-do-projeto> [--frontend=react|livewire-mary|livewire-daisy|livewire-tall] [--set CHAVE=valor] [--yes] [--verbose] [--registry [path-ou-url]]');
   process.exit(1);
 }
 
@@ -25,6 +25,8 @@ for (let i = 0; i < rest.length; i++) {
     set[key] = valueParts.join('=');
   } else if (rest[i] === '--yes') {
     interactive = false;
+  } else if (rest[i] === '--verbose') {
+    setVerbose(true);
   } else if (rest[i] === '--registry') {
     // Espelha o --registry [path-ou-url] do `quanthum new` (commander) — sem
     // isso, --registry era silenciosamente ignorado aqui e o wrapper sempre
@@ -46,6 +48,6 @@ const variants = parseVariantFlags(rest);
 try {
   await runNew({ archetype: 'aquiles', name, set, variants, interactive, registryPath });
 } catch (err) {
-  console.error(`\n✖ ${err.message}`);
+  printErrorBox(err);
   process.exitCode = 1;
 }
