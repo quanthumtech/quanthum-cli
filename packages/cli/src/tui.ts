@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { execa } from 'execa';
-import { log, outro, spinner } from '@clack/prompts';
+import { log, outro } from '@clack/prompts';
 
 // Mesma paleta do banner (#06d889 = --color-primary do tema "quanthum" no
 // quanthum-portal) via truecolor ANSI — sem depender de chalk/picocolors.
@@ -84,6 +84,51 @@ export async function execTracked(
   }
 }
 
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function truncateForLine(label: string, reserve: number): string {
+  const max = Math.max(10, terminalWidth() - reserve);
+  return label.length > max ? `${label.slice(0, max - 1)}…` : label;
+}
+
+/**
+ * Spinner de uma linha só, escrito à mão — sem depender do `spinner()` do
+ * @clack/prompts. Aquele redesenha movendo o cursor entre linhas (não
+ * sobrescreve no lugar em vários terminais — WSL/Windows Terminal incluso —
+ * o que virava centenas de linhas repetidas em steps longos tipo `composer
+ * require`/`npx shadcn add`) e registra um listener de processo por chamada
+ * sem nunca remover (o "MaxListenersExceededWarning" acontecia porque cada
+ * step() cria um spinner novo — aqui, 10+ por rodada). Este usa só `\r` +
+ * "apaga até o fim da linha" (sem mover linha), e não registra listener
+ * nenhum.
+ */
+function createSpinner(): { start(label: string): void; stop(label: string): void } {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let frame = 0;
+
+  function render(label: string): void {
+    const glyph = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
+    process.stdout.write(`\r\x1b[K${GREEN}${glyph}${RESET} ${truncateForLine(label, 4)}`);
+    frame += 1;
+  }
+
+  return {
+    start(label: string) {
+      frame = 0;
+      render(label);
+      timer = setInterval(() => render(label), 90);
+      timer.unref?.();
+    },
+    stop(label: string) {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      process.stdout.write(`\r\x1b[K${truncateForLine(label, 0)}\n`);
+    },
+  };
+}
+
 /**
  * Envolve uma etapa lógica (pode conter vários `execTracked`) com spinner —
  * ou, sem TTY (pipeline/CI sem `-it`), com uma linha só por etapa, sem
@@ -100,14 +145,14 @@ export async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
     }
   }
 
-  const s = spinner();
+  const s = createSpinner();
   s.start(label);
   try {
     const result = await fn();
     s.stop(`${GREEN}✔${RESET} ${label}`);
     return result;
   } catch (err) {
-    s.stop(`${RED}✖${RESET} ${label}`, 1);
+    s.stop(`${RED}✖${RESET} ${label}`);
     throw err;
   }
 }
