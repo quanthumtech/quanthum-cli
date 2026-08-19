@@ -19,23 +19,29 @@ isso é a M1/M3, plano à parte.
 Não publicado no npm — `npm install -g git+https://...` quebra em versões
 recentes do npm num `rename()` de symlink durante a instalação global de uma
 dependência git (mesmo problema documentado no `aleksandria-cli`). Por isso
-o instalador é um script próprio, mesmo padrão dos outros CLIs da Quanthum:
+o instalador é um script próprio, mesmo padrão dos outros CLIs da Quanthum —
+com uma diferença: **este repositório é privado** (`aleksandria-cli` é
+público, por isso o `curl | bash` direto funciona lá e não aqui — sem
+autenticação, `raw.githubusercontent.com` responde 404 pra conteúdo de repo
+privado). Então o primeiro passo precisa ser um `git clone` de verdade
+(que já usa a credencial que você tiver configurada), não um `curl` cru:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/quanthumtech/quanthum-cli/master/install.sh | bash
+git clone https://github.com/quanthumtech/quanthum-cli.git ~/.quanthum-cli && bash ~/.quanthum-cli/install.sh
 ```
 
-Clona em `~/.quanthum-cli`, builda e faz `npm link` nos dois pacotes —
-deixa `quanthum` e `quanthum-aquiles` prontos no terminal. Rodar o mesmo
-comando de novo atualiza (`git pull` + rebuild + relink).
+Builda e faz `npm link` nos dois pacotes — deixa `quanthum` e
+`quanthum-aquiles` prontos no terminal. Rodar `~/.quanthum-cli/install.sh`
+de novo depois (sem precisar clonar de novo) atualiza (`git pull` + rebuild
++ relink).
 
 **Requisitos mínimos:**
 - **Node 20+** e **git**
 - **PHP 8.3+** e **Composer** — a CLI em si não usa, mas o `setup` do
   template gerado precisa (ex.: `composer install`, `php artisan key:generate`)
-- **Git autenticado no GitHub** com acesso de leitura aos repos privados dos
-  arquétipos (`quanthum-aquiles`, `quanthum-ulisses`) — sem isso o clone do
-  template falha na hora de gerar o projeto
+- **Git autenticado no GitHub** com acesso de leitura a este repositório e
+  aos dos arquétipos (`quanthum-aquiles`, `quanthum-ulisses`) — sem isso o
+  clone falha (aqui, ou do template na hora de gerar o projeto)
 
 **Windows (ex.: Laragon):** rode o comando de instalação no **Git Bash**
 (já vem com o Git for Windows que o Laragon usa) — não é PowerShell/cmd. Se
