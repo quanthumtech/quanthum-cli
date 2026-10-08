@@ -7,6 +7,7 @@ import { applyPlaceholders, resolvePlaceholderValues, type PlaceholderValues } f
 import { parseManifest, variantsSupportPostSetup, type Manifest } from '../manifest.js';
 import { resolveArchetype } from '../registry.js';
 import { reportProject } from '../report.js';
+import { formatEnvHint } from '../env-vars.js';
 import { runSetup } from '../setup.js';
 import { note, printBanner, printSuccess, printVerboseHint, step } from '../tui.js';
 import { applyVariants, cleanupVariantDirs, resolveVariantChoices, type VariantChoices } from '../variants.js';
@@ -125,6 +126,11 @@ export async function runNew(options: RunNewOptions): Promise<RunNewResult> {
   if (setupCommands.length > 0) {
     note(`Rodando setup (${setupCommands.length} comando${setupCommands.length > 1 ? 's' : ''})`);
     await runSetup(destDir, setupCommands);
+  }
+
+  const envHint = formatEnvHint(options.archetype);
+  if (envHint.length > 0) {
+    log.info(envHint.join('\n'));
   }
 
   printSuccess(`Projeto "${options.name}" criado a partir de "${options.archetype}".`, `cd ${options.name}`);
